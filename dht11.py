@@ -120,3 +120,21 @@ class DHT11:
             checksum += buf
         if checksum & 0xFF != buffer[4]:
             raise InvalidChecksum()
+        
+class TemperatureBuffer:
+    _buff: list
+    _buffLen: int
+
+    def __init__(self, buffLen):
+        self._buffLen = buffLen
+        self._buff = [-273 for idx in range(buffLen)]
+    
+    def append(self, val):
+        if len(self._buff) < self._buffLen:
+            self._buff.append(val)
+        else:
+            self._buff.pop(0)
+            self._buff.append(val)
+    
+    def get(self):
+        return self._buff

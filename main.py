@@ -1,20 +1,28 @@
-from machine import Pin, I2C
+from machine import Pin, I2C, Timer	
 import utime as time
-from dht11 import DHT11, InvalidChecksum
-import concurrent.futures
+from dht11 import DHT11, InvalidChecksum, TemperatureBuffer
+#import concurrent.futures
 import _thread
 from cfg import *
-from collections import deque
-
+from ucollections import deque
+from picozero import pico_led
 import socket
 
 lock = _thread.allocate_lock()
-temperature = deque([-273 for idx in range(TEMPERATURE_BUFFER_LENGTH)], maxlen=TEMPERATURE_BUFFER_LENGTH)
 
+temperature = TemperatureBuffer(TEMPERATURE_BUFFER_LENGTH)
+
+
+def StopApplication():
+    print('Interrupted')
+    pico_led.off()
+    _thread.exit()
+    #machine.reset()
 
 def Socket_Init():
     # get the hostname
-    host = socket.gethostname()
+    #host = socket.gethostname()
+    host = '192.168.178.44'
     port = SOCKET_PORT_NUMBER  # initiate port num above 1024
 
     serverSocket = socket.socket()  # get instance
@@ -23,11 +31,14 @@ def Socket_Init():
 
     # configure how many client the server can listen simultaneously
     serverSocket.listen(SOCKET_MAX_CLIENTS)
+    
+    print("Socket init done")
 
     return serverSocket
 
 
 def Socket_Serve(serverSocket: socket.socket):
+    print("Waiting for a new connection...")
     conn, address = serverSocket.accept()  # accept new connection
 
     print("Connection from: " + str(address))
@@ -41,7 +52,7 @@ def Socket_Serve(serverSocket: socket.socket):
         print("from connected user: " + str(data))
         if data == "update":
             lock.acquire()
-            tempBuff = list(temperature)  # buffer of 10 temperature samples
+            tempBuff = temperature.get() # buffer of 10 temperature samples
             lock.release()
         elif data == "stop":
             break
@@ -56,42 +67,59 @@ def Socket_Handle():
         serverSocket = Socket_Init()
         Socket_Serve(serverSocket)
     except Exception as e:
-        print("Exception " + str(e) + " in socket thread")
+        print("Exception " + str(e) + " during socket handling");
+        serverSocket.close()
+        StopApplication()
 
 
 def Sensor_Init():
     pin = Pin(DHT11_GPIO_NUM, Pin.OUT, Pin.PULL_DOWN)       # TODO verifica che pin usi
     sensor = DHT11(pin)
+    print("Sensor init done")
     return sensor
 
 
 def Sensor_Get(sensor):
     while(True):
-        time.sleep(TEMPERATURE_UPDATE_PERIOD_S)
-        t  = (sensor.temperature)
-        lock.acquire()
-        temperature.append(t)
-        lock.release()
-        h = (sensor.humidity)
+        try:
+            time.sleep(TEMPERATURE_UPDATE_PERIOD_S)
+            t  = (sensor.temperature)
+            h = (sensor.humidity)
+            print("Temperature = " + str(t) + ", humidity = " + str(h))
+            #lock.acquire()
+            #temperature.append(t)
+            #lock.release()
+        except Exception as e:
+            print("Exception " + str(e) + " during sensor data acquisition")
+        
         # TODO gestisci anche l'umidità
-        print("Temperature: {}".format(sensor.temperature))
-        print("Humidity: {}".format(sensor.humidity))
+        #print("Temperature: {:0.2f}".format(t))
+        #print("Humidity: {:0.2f}".format(h))
+        
 
 def Field_Handle():
-    sensor = Sensor_Init()
-    Sensor_Get(sensor)
+    try:
+        sensor= Sensor_Init()
+        Sensor_Get(sensor)
+    except Exception as e:
+        print("Exception " + str(e) + " during sensor data acquisition");
+        StopApplication()
+        
+
+def Blink():
+    led.toggle()
+    #pico_led.off()
 
 
 if __name__ =='__main__':
-    time.sleep(5)
-    threadPool = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADPOOL_WORKERS)
+    time.sleep(2)
+    
+    #led = Pin("LED", Pin.OUT)
+    #timer = Timer()
+    #timer.init(freq=1, mode=Timer.PERIODIC, callback=Blink)
 
-    # submit tasks to the pool
-    fieldThread = threadPool.submit(Field_Handle)
-    socketThread = threadPool.submit(Socket_Handle)
+    # submit tasks to the second thread
+    #secondThread = _thread.start_new_thread(Socket_Handle, ())
+    
+    Field_Handle()
 
-    # wait for all tasks to complete
-    threadPool.shutdown(wait=True)
-
-        
-        
