@@ -83,19 +83,18 @@ def Sensor_Get(sensor):
     while(True):
         try:
             time.sleep(TEMPERATURE_UPDATE_PERIOD_S)
-            t  = (sensor.temperature)
-            h = (sensor.humidity)
+            t = sensor.temperature
+            h = sensor.humidity
+            #t  = ((sensor.temperature * TEMPERATURE_ALFA) + ((1-TEMPERATURE_ALFA)*temperature.getAvg()))
+            #h = ((sensor.humidity * HUMIDIRY_ALFA) + ((1-HUMIDITY_ALFA)*t))
             print("Temperature = " + str(t) + ", humidity = " + str(h))
-            #lock.acquire()
-            #temperature.append(t)
-            #lock.release()
+            Blink()
+            lock.acquire()
+            temperature.append(t)
+            lock.release()
         except Exception as e:
             print("Exception " + str(e) + " during sensor data acquisition")
-        
-        # TODO gestisci anche l'umidità
-        #print("Temperature: {:0.2f}".format(t))
-        #print("Humidity: {:0.2f}".format(h))
-        
+
 
 def Field_Handle():
     try:
@@ -114,12 +113,12 @@ def Blink():
 if __name__ =='__main__':
     time.sleep(2)
     
-    #led = Pin("LED", Pin.OUT)
+    led = Pin("LED", Pin.OUT)
     #timer = Timer()
     #timer.init(freq=1, mode=Timer.PERIODIC, callback=Blink)
 
     # submit tasks to the second thread
-    #secondThread = _thread.start_new_thread(Socket_Handle, ())
+    secondThread = _thread.start_new_thread(Socket_Handle, ())
     
     Field_Handle()
 
